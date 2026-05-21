@@ -6,6 +6,7 @@ CREATE TABLE pods (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   telegram_group_id bigint UNIQUE NOT NULL,
   name text,
+  status_message_id bigint,  -- Telegram message id for the "X/3 connected" group counter
   created_at timestamptz DEFAULT now()
 );
 
@@ -46,11 +47,26 @@ CREATE TABLE proposal_votes (
   UNIQUE(proposal_id, member_id, round)  -- idempotency guard
 );
 
+-- magic_tokens: one-time links for securely connecting a Wallbit API key
+-- token is a random UUID sent in the magic link URL
+-- telegram_group_id tracks which group to update the "X/3 connected" counter
+CREATE TABLE magic_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  token uuid UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+  telegram_user_id bigint NOT NULL,
+  telegram_group_id bigint NOT NULL,
+  pod_id uuid REFERENCES pods NOT NULL,
+  expires_at timestamptz NOT NULL DEFAULT now() + interval '15 minutes',
+  used_at timestamptz,
+  created_at timestamptz DEFAULT now()
+);
+
 -- RLS: enable on all tables
 ALTER TABLE pods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pod_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE proposal_votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE magic_tokens ENABLE ROW LEVEL SECURITY;
 
 -- Service role bypasses RLS (used by the bot's server-side calls)
 -- No public read policies — all access via service role key
