@@ -35,6 +35,9 @@ CREATE TABLE pod_members (
   pod_id uuid REFERENCES pods NOT NULL,
   telegram_user_id bigint NOT NULL,
   wallbit_api_key_encrypted text NOT NULL,
+  -- Member profile built by onboarding agent after Wallbit connection
+  profile jsonb,  -- { riskProfile, techExposurePct, cashUsd, topHoldings, insights[] }
+  profile_built_at timestamptz,
   joined_at timestamptz DEFAULT now(),
   UNIQUE(pod_id, telegram_user_id)
 );
@@ -80,14 +83,27 @@ CREATE TABLE proposal_votes (
 - [ ] src/lib/telegram/handlers/pair-mirroring.ts: /pair-mirroring command → session dashboard
 - **Done:** bot responds in DM, Wallbit data fetchable, /pair-mirroring shows pod snapshot
 
-### Day 2 — Intelligence layer (target: personalized DM analysis)
-- [ ] src/lib/pod/agent.ts: (member, proposal, wallbitData) → Claude API → AgentDecision
-  - System prompt: LATAM context, bilingual, Marcos/María/Juan personas
-  - Calculates: tech exposure %, cash remaining, sector concentration flags
+### Day 2 — Intelligence layer (target: per-member agent with portfolio understanding)
+
+#### 2a — Onboarding agent (triggers on Wallbit connection)
+- [ ] src/lib/pod/onboarding-agent.ts: triggered by connect/route.ts after key is saved
+  - Decrypts key → calls getCheckingBalance() + getStocksPortfolio() + getTransactions()
+  - Claude call: builds member profile → riskProfile, techExposurePct, cashUsd, topHoldings, insights[]
+  - Saves profile to pod_members.profile + profile_built_at
+  - Sends DM to member: "Analicé tu portfolio — [personalized summary]"
+  - Falls back to mock persona if Wallbit call fails
+- [ ] Add profile column to pod_members in Supabase
+
+#### 2b — Proposal flow
+- [ ] src/lib/pod/agent.ts: (member + saved profile + proposal + fresh wallbitData) → Claude API → AgentDecision
+  - Reads pre-built profile as context — does NOT rebuild from scratch
+  - System prompt: LATAM context, bilingual
+  - Output: { decision, counteroffer, reasoning, risk_flags }
+  - JSON parse guard: try/catch → fallback { decision: "reject", reasoning: "parse error" }
 - [ ] src/lib/telegram/handlers/propose.ts: parse /propose NVDA 300 → proportional splits → create proposals row → call orchestrator
-- [ ] src/lib/pod/orchestrator.ts: Promise.all of 3 agent calls → writes votes → sends DMs
+- [ ] src/lib/pod/orchestrator.ts: Promise.all of agent calls (uses saved profiles) → writes votes → sends DMs
 - [ ] src/lib/telegram/handlers/dm.ts: sends inline keyboard ✅ ❌ ⚙️ to each member
-- **Done:** /propose NVDA 300 in group → 3 simultaneous personalized DMs
+- **Done:** member connects → gets personalized portfolio DM → /propose NVDA 300 → 3 informed simultaneous DMs
 
 ### Day 3 — Negotiation (target: full round-trip works)
 - [ ] src/lib/telegram/handlers/vote.ts: handles vote_approve, vote_reject, vote_counter callbacks
@@ -116,7 +132,8 @@ CREATE TABLE proposal_votes (
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | Telegram webhook 5s timeout | Medium | setImmediate + "Analizando..." message |
-| Real Wallbit keys unavailable | Medium | Mock data spec ready (3 hardcoded personas) |
+| Real Wallbit keys unavailable | Medium | Mock data spec ready (3 hardcoded personas); onboarding-agent detects empty portfolio and falls back |
+| Onboarding agent slow (Wallbit + Claude ~4s) | Low | Run in setImmediate after connect route returns — user gets "Analizando tu portfolio..." DM immediately |
 | Claude API slow (>10s per call) | Low | Promise.all makes it ~3s not ~9s |
 | Negotiation deadlock in demo | Low | Pre-rehearsed: María always votes ❌ → QQQ → consensus |
 | Telegram duplicate webhook delivery | Low | UNIQUE(proposal_id, member_id, round) in DB |
@@ -128,13 +145,15 @@ CREATE TABLE proposal_votes (
 
 **Engineer A — Bot + Orchestration:**
 - Day 1: Telegraf setup, webhook, magic link, pair-mirroring.ts
-- Day 2: propose.ts, orchestrator.ts
+- Day 2: propose.ts, orchestrator.ts, dm.ts
 - Day 3: vote.ts, negotiation.ts
 
 **Engineer B — Intelligence + Wallbit:**
 - Day 1: wallbit/client.ts, Supabase schema
-- Day 2: agent.ts + system prompts + mock personas
+- Day 2: onboarding-agent.ts (profile builder) + agent.ts (proposal analysis) + mock personas
 - Day 3: counteroffer logic, sector classification
+
+Merge point Day 2: orchestrator calls agent.ts which reads profiles built by onboarding-agent.ts.
 
 Merge point: Day 3 — vote handler calls negotiation which calls agent.
 
