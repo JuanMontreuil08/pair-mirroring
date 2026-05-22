@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { encrypt } from '@/lib/crypto'
 import { bot } from '@/lib/telegram/bot'
+import { runOnboardingAgent } from '@/lib/pod/onboarding-agent'
 
 export async function POST(req: NextRequest) {
   const { token, wallbitApiKey } = await req.json()
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest) {
 
   // Update the group status message
   await updateGroupStatus(magicToken.pod_id, magicToken.telegram_group_id)
+
+  // Fire onboarding agent in background — non-blocking
+  setImmediate(() => {
+    runOnboardingAgent(magicToken.telegram_user_id, wallbitApiKey).catch((err) =>
+      console.error('Onboarding agent error:', err)
+    )
+  })
 
   return NextResponse.json({ ok: true })
 }
