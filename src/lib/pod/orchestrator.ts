@@ -101,19 +101,8 @@ export async function runOrchestrator({ proposal, podId, chatId }: OrchestratorP
     })
   )
 
-  // Push each vote to Supermemory — builds negotiation pattern over time
-  await Promise.all(
-    agentResults.map(async ({ member, decision }) => {
-      const counterofferNote = decision.counteroffer
-        ? ` Counteroffered ${decision.counteroffer.symbol} $${decision.counteroffer.amount}.`
-        : ''
-
-      await memory.add({
-        content: `Negotiation round ${proposal.round}: ${decision.decision === 'approve' ? 'approved' : decision.decision === 'reject' ? 'rejected' : 'counteroffered'} proposal to buy ${proposal.symbol} $${proposal.total_amount_usd}.${counterofferNote} Reasoning: ${decision.reasoning}. Risk flags: ${decision.risk_flags.join(', ') || 'none'}.`,
-        containerTags: [`user_${member.telegram_user_id}`],
-      }).catch((err) => console.warn('[orchestrator] supermemory push failed:', err))
-    })
-  )
+  // Supermemory is written in vote.ts after user confirms — not here.
+  // That way each entry captures both the agent recommendation AND the user's actual decision.
 
   // Send personalized DM to each member
   await Promise.all(

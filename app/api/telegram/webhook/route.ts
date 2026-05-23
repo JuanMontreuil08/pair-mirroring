@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { handlePairMirroring } from '@/lib/telegram/handlers/pair-mirroring'
 import { handlePropose } from '@/lib/telegram/handlers/propose'
 import { handleOnboardingCallback } from '@/lib/pod/onboarding-agent'
+import { handleVoteCallback } from '@/lib/telegram/handlers/vote'
 
 export async function POST(req: NextRequest) {
   // Return 200 immediately — Telegram times out at 5s, agents take longer
@@ -20,6 +21,8 @@ async function processUpdate(update: any) {
 
       if (data.startsWith('ob:')) {
         await handleOnboardingCallback(userId, data, query.id)
+      } else if (data.startsWith('vote:')) {
+        await handleVoteCallback(userId, data, query.id)
       }
       return
     }

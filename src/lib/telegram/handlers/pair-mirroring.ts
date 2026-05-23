@@ -54,6 +54,44 @@ export async function handlePairMirroring({
   // Get or create the pod for this group
   const pod = await getOrCreatePod(chatId)
 
+  // Resolve all user IDs first so we know the exact intended set
+  const resolvedMembers: Array<{ userId: number; displayName: string }> = []
+  for (const member of members) {
+    let resolvedId = member.userId
+    if (resolvedId === 0 && member.username) {
+      if (member.username === message.from?.username) {
+        resolvedId = message.from.id
+      } else {
+        try {
+          const chatMember = await bot.telegram.getChatMember(chatId, `@${member.username}` as any)
+          resolvedId = chatMember.user.id
+        } catch {
+          resolvedMembers.push({ userId: 0, displayName: member.displayName })
+          continue
+        }
+      }
+    }
+    resolvedMembers.push({ userId: resolvedId, displayName: member.displayName })
+  }
+
+  const intendedIds = resolvedMembers.filter((m) => m.userId !== 0).map((m) => m.userId)
+
+  // Remove pod_members and magic_tokens that belong to users NOT in this command.
+  // This ensures previous session data doesn't pollute the count.
+  if (intendedIds.length > 0) {
+    await supabase
+      .from('pod_members')
+      .delete()
+      .eq('pod_id', pod.id)
+      .not('telegram_user_id', 'in', `(${intendedIds.join(',')})`)
+
+    await supabase
+      .from('magic_tokens')
+      .delete()
+      .eq('pod_id', pod.id)
+      .not('telegram_user_id', 'in', `(${intendedIds.join(',')})`)
+  }
+
   // Check which users are already connected
   const { data: existingMembers } = await supabase
     .from('pod_members')
@@ -62,37 +100,24 @@ export async function handlePairMirroring({
 
   const connectedIds = new Set((existingMembers ?? []).map((m: any) => m.telegram_user_id))
 
-  // Resolve user ids and send magic links
+  // Send magic links (user IDs already resolved above)
   const statusLines = await Promise.all(
-    members.map(async (member) => {
-      let resolvedId = member.userId
-
-      if (resolvedId === 0 && member.username) {
-        // If it's the message sender mentioning themselves, use their id directly.
-        // getChatMember with @username only works in supergroups, not regular groups.
-        if (member.username === message.from?.username) {
-          resolvedId = message.from.id
-        } else {
-          try {
-            const chatMember = await bot.telegram.getChatMember(chatId, `@${member.username}` as any)
-            resolvedId = chatMember.user.id
-          } catch {
-            return `├ ${member.displayName}  ❓ no encontrado en el grupo`
-          }
-        }
+    resolvedMembers.map(async (member) => {
+      if (member.userId === 0) {
+        return `├ ${member.displayName}  ❓ no encontrado en el grupo`
       }
 
-      if (connectedIds.has(resolvedId)) {
+      if (connectedIds.has(member.userId)) {
         return `├ ${member.displayName}  ✅ conectado`
       }
 
-      await sendMagicLink(pod.id, resolvedId, chatId, member.displayName)
+      await sendMagicLink(pod.id, member.userId, chatId, member.displayName)
       return `├ ${member.displayName}  🔗 invitación enviada`
     })
   )
 
   const connected = statusLines.filter((l) => l.includes('✅')).length
-  const total = members.length
+  const total = resolvedMembers.length
 
   const statusText =
     connected === total

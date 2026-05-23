@@ -68,16 +68,20 @@ async function updateGroupStatus(podId: string, groupChatId: number) {
       .select('telegram_user_id')
       .eq('pod_id', podId)
 
-    // Count expected members from pending tokens (to know the total)
-    const { data: allTokens } = await supabase
+    // Count pending members: non-expired tokens for users not yet in pod_members
+    const connectedIds = new Set((members ?? []).map((m: any) => m.telegram_user_id))
+    const { data: pendingTokens } = await supabase
       .from('magic_tokens')
       .select('telegram_user_id')
       .eq('pod_id', podId)
+      .is('used_at', null)
+      .gt('expires_at', new Date().toISOString())
 
     const connected = members?.length ?? 0
-    const total = allTokens
-      ? new Set(allTokens.map((t: any) => t.telegram_user_id)).size
-      : connected
+    const pendingCount = pendingTokens
+      ? new Set(pendingTokens.filter((t: any) => !connectedIds.has(t.telegram_user_id)).map((t: any) => t.telegram_user_id)).size
+      : 0
+    const total = connected + pendingCount
 
     const allDone = connected >= total
 
