@@ -82,6 +82,22 @@ export async function handlePropose({ chatId, userId, text }: HandleProposeParam
     return
   }
 
+  // Block if there's already an open proposal for this pod
+  const { data: openProposal } = await supabase
+    .from('proposals')
+    .select('id, symbol')
+    .eq('pod_id', pod.id)
+    .eq('status', 'negotiating')
+    .single()
+
+  if (openProposal) {
+    await bot.telegram.sendMessage(
+      chatId,
+      `⚠️ Ya hay una propuesta abierta para ${openProposal.symbol}. Esperá a que se resuelva antes de proponer otra.`
+    )
+    return
+  }
+
   // Create proposal
   const { data: proposal, error } = await supabase
     .from('proposals')

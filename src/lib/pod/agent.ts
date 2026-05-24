@@ -17,8 +17,9 @@ export interface Proposal {
 
 export interface UserContext {
   telegramUserId: number
-  profile: any            // from user_profiles.profile (onboarding result)
-  memoryContext: string   // from Supermemory — past negotiation patterns
+  profile: any                        // from user_profiles.profile (onboarding result)
+  memoryContext: string               // from Supermemory — past negotiation patterns
+  stockInfo: Record<string, any> | null  // from Wallbit /assets/{symbol}
 }
 
 export interface AgentDecision {
@@ -33,7 +34,7 @@ export async function runProposalAgent(
   ctx: UserContext,
   proposal: Proposal
 ): Promise<AgentDecision> {
-  const { profile, memoryContext, telegramUserId } = ctx
+  const { profile, memoryContext, stockInfo, telegramUserId } = ctx
   const isOwnProposal = telegramUserId === proposal.proposedBy
 
   const response = await anthropic.messages.create({
@@ -92,12 +93,28 @@ ${isOwnProposal ? '⚠️ This investor made this proposal themselves. They shou
 - Profile summary: ${profile?.summary ?? 'No summary available'}
 - Data quality: ${profile?.wallbit?.data_quality ?? 'empty'}
 
-## Negotiation History (from memory)
+## Revealed Preferences (from memory — treat as ground truth, may override self-reported profile above)
 ${memoryContext || 'No previous negotiations recorded.'}
+If the behavioral summary shows a high override rate or a pattern that contradicts the self-reported profile, trust the behavior over the stated preference.
+
+## Stock Info (from Wallbit)
+${stockInfo ? `- Name: ${stockInfo.name ?? proposal.symbol}
+- Current price: $${stockInfo.price ?? 'unknown'}
+- Sector: ${stockInfo.sector ?? 'unknown'}
+- Market cap: ${stockInfo.market_cap_m ? `$${stockInfo.market_cap_m}M` : 'unknown'}
+- Asset type: ${stockInfo.asset_type ?? 'unknown'}
+- Country: ${stockInfo.country ?? 'unknown'}
+- CEO: ${stockInfo.ceo ?? 'unknown'}
+- Employees: ${stockInfo.employees ?? 'unknown'}
+- Dividend yield: ${stockInfo.dividend?.yield != null ? `${stockInfo.dividend.yield}%` : 'none'}
+- Description: ${stockInfo.description_es ?? stockInfo.description ?? 'No description available'}` : 'Stock data unavailable — rely on training knowledge.'}
 
 ## Proposal
 - Symbol: ${proposal.symbol}
 - Amount: $${proposal.amount} USD
+
+## Ground Rules
+Base all decisions strictly on the data provided above. Do not infer or assume facts about this investor that are not present in their profile or memory. If a field is unknown or empty, treat it as unknown — do not fill in gaps with assumptions. For stock analysis, the Wallbit data above takes priority over general market knowledge.
 
 ## Decision Rules
 - conservative + short horizon → reject speculative single stocks, prefer broad ETFs

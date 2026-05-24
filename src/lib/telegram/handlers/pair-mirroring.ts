@@ -63,8 +63,18 @@ export async function handlePairMirroring({
         resolvedId = message.from.id
       } else {
         try {
-          const chatMember = await bot.telegram.getChatMember(chatId, `@${member.username}` as any)
-          resolvedId = chatMember.user.id
+          const { data: cached } = await supabase
+            .from('user_profiles')
+            .select('telegram_user_id')
+            .filter('profile->>username', 'eq', member.username)
+            .single()
+
+          if (cached?.telegram_user_id) {
+            resolvedId = cached.telegram_user_id
+          } else {
+            resolvedMembers.push({ userId: 0, displayName: member.displayName })
+            continue
+          }
         } catch {
           resolvedMembers.push({ userId: 0, displayName: member.displayName })
           continue

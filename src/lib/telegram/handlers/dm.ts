@@ -13,9 +13,11 @@ interface SendDecisionDMParams {
     round: number
   }
   decision: AgentDecision
+  stockInfo: Record<string, any> | null
+  previousVote: string | null
 }
 
-export async function sendDecisionDM({ telegramUserId, proposal, decision }: SendDecisionDMParams) {
+export async function sendDecisionDM({ telegramUserId, proposal, decision, stockInfo, previousVote }: SendDecisionDMParams) {
   const decisionEmoji = decision.decision === 'approve' ? '✅' : decision.decision === 'reject' ? '❌' : '⚙️'
   const decisionLabel = decision.decision === 'approve' ? 'Aprobar' : decision.decision === 'reject' ? 'Rechazar' : 'Contraoferta'
 
@@ -23,16 +25,37 @@ export async function sendDecisionDM({ telegramUserId, proposal, decision }: Sen
     ? `\n💡 Mi contraoferta: $${decision.counteroffer.amount} de ${decision.counteroffer.symbol}`
     : ''
 
-  const riskNote = decision.risk_flags.length > 0
-    ? `\n⚠️ Riesgos: ${decision.risk_flags.join(', ')}`
+  const stockBlock = stockInfo
+    ? `\n📊 *${stockInfo.name ?? proposal.symbol}*` +
+      (stockInfo.price != null ? ` · $${stockInfo.price}` : '') +
+      (stockInfo.sector ? ` · ${stockInfo.sector}` : '') +
+      (stockInfo.market_cap_m ? ` · Cap: $${stockInfo.market_cap_m}M` : '') +
+      (stockInfo.country ? ` · ${stockInfo.country}` : '') +
+      (stockInfo.ceo ? `\nCEO: ${stockInfo.ceo}` : '') +
+      (stockInfo.employees ? ` · Empleados: ${stockInfo.employees}` : '') +
+      (stockInfo.dividend?.yield != null ? ` · Dividendo: ${stockInfo.dividend.yield}%` : '') +
+      (stockInfo.description_es ?? stockInfo.description
+        ? `\n_${stockInfo.description_es ?? stockInfo.description}_`
+        : '') +
+      '\n'
+    : ''
+
+  const previousVoteLabels: Record<string, string> = {
+    approve: '✅ aprobaste',
+    reject: '❌ rechazaste',
+    counteroffer: '⚙️ enviaste una contraoferta',
+  }
+  const previousVoteNote = previousVote
+    ? `\n_En la ronda anterior ${previousVoteLabels[previousVote] ?? previousVote}. Como no hubo consenso, se abre una nueva ronda._\n`
     : ''
 
   const text =
-    `📋 *Propuesta:* comprar $${proposal.total_amount_usd} de ${proposal.symbol} (ronda ${proposal.round})\n\n` +
-    `${decisionEmoji} *Mi recomendación:* ${decisionLabel}\n\n` +
+    `📋 *Propuesta:* comprar $${proposal.total_amount_usd} de ${proposal.symbol} (ronda ${proposal.round})\n` +
+    previousVoteNote +
+    stockBlock +
+    `\n${decisionEmoji} *Mi recomendación:* ${decisionLabel}\n\n` +
     `💬 ${decision.reasoning}` +
     counterofferNote +
-    riskNote +
     `\n\n¿Confirmás tu voto?`
 
   await bot.telegram.sendMessage(telegramUserId, text, {

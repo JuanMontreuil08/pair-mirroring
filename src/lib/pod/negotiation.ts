@@ -16,18 +16,23 @@ export async function checkConsensus(proposalId: string, podId: string, round: n
 
   if (!members || members.length === 0) return
 
-  // Get votes for this round
+  // Only count votes confirmed by users (vote IS NOT NULL) — agent_vote doesn't count
   const { data: votes } = await supabase
     .from('proposal_votes')
     .select('vote, member_id')
     .eq('proposal_id', proposalId)
     .eq('round', round)
+    .not('vote', 'is', null)
+
+  console.log(`[negotiation] round ${round} — ${votes?.length ?? 0}/${members.length} users confirmed their vote`)
 
   // Wait until every member has tapped a button
   if (!votes || votes.length < members.length) {
-    console.log(`[negotiation] waiting — ${votes?.length ?? 0}/${members.length} voted (round ${round})`)
+    console.log(`[negotiation] waiting for remaining ${members.length - (votes?.length ?? 0)} member(s) to confirm`)
     return
   }
+
+  console.log(`[negotiation] all members voted — checking consensus: ${votes.map(v => v.vote).join(', ')}`)
 
   // Get proposal + group chat id via join
   const { data: proposal } = await supabase
@@ -43,10 +48,15 @@ export async function checkConsensus(proposalId: string, podId: string, round: n
   const allApprove = votes.every((v) => v.vote === 'approve')
 
   if (allApprove) {
-    await supabase
+    // Atomic update — only one process wins if two users tap simultaneously
+    const { data: won } = await supabase
       .from('proposals')
       .update({ status: 'approved', resolved_at: new Date().toISOString() })
       .eq('id', proposalId)
+      .eq('status', 'negotiating')
+      .select('id')
+
+    if (!won || won.length === 0) return // another process already resolved this
 
     await bot.telegram.sendMessage(
       chatId,
@@ -58,10 +68,14 @@ export async function checkConsensus(proposalId: string, podId: string, round: n
   }
 
   if (round >= MAX_ROUNDS) {
-    await supabase
+    const { data: won } = await supabase
       .from('proposals')
       .update({ status: 'rejected', resolved_at: new Date().toISOString() })
       .eq('id', proposalId)
+      .eq('status', 'negotiating')
+      .select('id')
+
+    if (!won || won.length === 0) return // another process already resolved this
 
     const summary = votes
       .map((v) => `• ${v.vote}`)

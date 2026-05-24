@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { decrypt } from '@/lib/crypto'
 import { runProposalAgent } from '@/lib/pod/agent'
 import { sendDecisionDM } from '@/lib/telegram/handlers/dm'
+import { getAsset } from '@/lib/wallbit/client'
 
 const memory = new Supermemory({ apiKey: process.env.SUPERMEMORY_API_KEY })
 
@@ -51,6 +52,23 @@ export async function runOrchestrator({ proposal, podId, chatId }: OrchestratorP
   const proposerMember = members.find((m) => m.id === proposal.proposer_id)
   const proposerUserId = proposerMember?.telegram_user_id ?? 0
 
+  // Fetch stock info once — any member's key works, assets are not user-specific
+  const firstKey = members[0]?.wallbit_api_key_encrypted
+    ? decrypt(members[0].wallbit_api_key_encrypted)
+    : null
+  let stockInfo: Record<string, any> | null = null
+  if (firstKey) {
+    try {
+      console.log(`[wallbit] fetching asset info for ${proposal.symbol}...`)
+      const asset = await getAsset(firstKey, proposal.symbol)
+      // Wallbit wraps all responses in a `data` key
+      stockInfo = asset?.data ?? null
+      console.log(`[wallbit] ${proposal.symbol} → name: ${stockInfo?.name}, price: $${stockInfo?.price}, sector: ${stockInfo?.sector}, market_cap: $${stockInfo?.market_cap_m}M, has_description: ${!!(stockInfo?.description_es ?? stockInfo?.description)}`)
+    } catch (err) {
+      console.warn(`[wallbit] failed to fetch asset info for ${proposal.symbol}:`, err)
+    }
+  }
+
   // Run all agents in parallel — one per member
   const agentResults = await Promise.all(
     members.map(async (member) => {
@@ -70,6 +88,7 @@ export async function runOrchestrator({ proposal, podId, chatId }: OrchestratorP
           telegramUserId: member.telegram_user_id,
           profile,
           memoryContext,
+          stockInfo,
         },
         {
           symbol: proposal.symbol,
@@ -82,27 +101,44 @@ export async function runOrchestrator({ proposal, podId, chatId }: OrchestratorP
     })
   )
 
-  // Save votes to Supabase
+  // Save agent recommendations — vote stays null until user confirms via button tap
   await Promise.all(
     agentResults.map(async ({ member, decision }) => {
+      console.log(`[orchestrator] agent recommendation for user ${member.telegram_user_id}: ${decision.decision}${decision.counteroffer ? ` → ${decision.counteroffer.symbol} $${decision.counteroffer.amount}` : ''}`)
       const { error } = await supabase
         .from('proposal_votes')
         .upsert({
           proposal_id: proposal.id,
           member_id: member.id,
           round: proposal.round,
-          vote: decision.decision,
+          vote: null,                          // null until user taps — prevents false consensus
+          agent_vote: decision.decision,
           counteroffer_symbol: decision.counteroffer?.symbol ?? null,
           counteroffer_amount: decision.counteroffer?.amount ?? null,
           reason: decision.reasoning,
         }, { onConflict: 'proposal_id,member_id,round' })
 
-      if (error) console.error('[orchestrator] vote save error:', error)
+      if (error) console.error('[orchestrator] agent vote save error:', error)
     })
   )
 
   // Supermemory is written in vote.ts after user confirms — not here.
   // That way each entry captures both the agent recommendation AND the user's actual decision.
+
+  // Fetch previous round votes so the DM can remind users what they chose before
+  const previousVoteMap: Record<string, string> = {}
+  if (proposal.round > 1) {
+    const { data: prevVotes } = await supabase
+      .from('proposal_votes')
+      .select('member_id, vote')
+      .eq('proposal_id', proposal.id)
+      .eq('round', proposal.round - 1)
+      .not('vote', 'is', null)
+
+    for (const v of prevVotes ?? []) {
+      previousVoteMap[v.member_id] = v.vote
+    }
+  }
 
   // Send personalized DM to each member
   await Promise.all(
@@ -111,11 +147,13 @@ export async function runOrchestrator({ proposal, podId, chatId }: OrchestratorP
         telegramUserId: member.telegram_user_id,
         proposal,
         decision,
+        stockInfo,
+        previousVote: previousVoteMap[member.id] ?? null,
       }).catch((err) => console.warn(`[orchestrator] DM failed for user ${member.telegram_user_id}:`, err))
     )
   )
 
-  console.log(`[orchestrator] done — ${agentResults.length} agents ran, votes saved, DMs sent`)
+  console.log(`[orchestrator] done — ${agentResults.length} agents ran, agent votes saved (waiting for user confirmation), DMs sent`)
 }
 
 async function fetchMemoryContext(

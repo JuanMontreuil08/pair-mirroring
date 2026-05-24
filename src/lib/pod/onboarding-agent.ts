@@ -221,10 +221,14 @@ summary: 1 sentence in Spanish describing this investor for negotiation context.
     })
     .eq('telegram_user_id', telegramUserId)
 
-  // Push to Supermemory — this is the seed for the orchestrator's memory
-  await memory.add({
-    content: `Investor profile: ${toolInput.summary}. Risk: ${toolInput.risk_profile}. Horizon: ${toolInput.investment_horizon}. Objective: ${toolInput.investment_objective}. Signals: ${toolInput.inferred_signals.join(', ')}. Holdings: ${JSON.stringify(wallbit?.holdings ?? [])}.`,
+  // Push to Supermemory — seed for orchestrator's memory context.
+  // entityContext tells Supermemory what to extract and index from this entry.
+  await (memory as any).add({
+    content: `Investor profile: ${toolInput.summary}. Risk tolerance: ${toolInput.risk_profile}. Investment horizon: ${toolInput.investment_horizon}. Objective: ${toolInput.investment_objective}. Portfolio style: ${toolInput.portfolio_style}. Behavioral signals: ${toolInput.inferred_signals.join(', ')}. Holdings: ${JSON.stringify(wallbit?.holdings ?? [])}. Cash balance: $${wallbit?.cash_balance ?? 0}.`,
     containerTags: [`user_${telegramUserId}`],
+    entityContext: 'LATAM investor profile for a group investment pod. Extract: risk tolerance, investment horizon, portfolio concentration, behavioral signals, and asset preferences. These facts should shape future investment proposal recommendations for this user.',
+    metadata: { memory_type: 'investor_profile' },
+    customId: `profile_${telegramUserId}`,
   })
 
   await bot.telegram.sendMessage(
