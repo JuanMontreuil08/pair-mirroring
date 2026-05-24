@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pair Mirroring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;1,9..144,300;1,9..144,400&family=Geist+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #F6F5F1;
+  --text: #100F0D;
+  --muted: #9B9791;
+  --muted2: #C4C0B8;
+  --surface: #FFFFFF;
+  --font-d: 'Plus Jakarta Sans', sans-serif;
+  --font-s: 'Fraunces', serif;
+  --font-m: 'Geist Mono', monospace;
+}
+
+/* ── BASE ── */
+html, body {
+  height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg); /* fallback while WebGL loads */
+  font-family: var(--font-d);
+  overflow-x: hidden;
+}
+
+/* Silk waves canvas — fixed background layer */
+#bg-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  display: block;
+}
+
+/* Page load fade */
+body { animation: pageFade 0.6s ease forwards; }
+@keyframes pageFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── HEADER ── */
+header {
+  padding: 56px 0 0;
+  text-align: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.wordmark {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+  line-height: 1;
+}
+
+.wm-italic {
+  font-family: var(--font-s);
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(48px, 5.5vw, 76px);
+  color: var(--text);
+  letter-spacing: -2px;
+}
+
+.wm-bold {
+  font-family: var(--font-d);
+  font-weight: 800;
+  font-size: clamp(48px, 5.5vw, 76px);
+  letter-spacing: -3.5px;
+  background: linear-gradient(
+    105deg,
+    #9A9590 0%,
+    #B8B3AC 18%,
+    #CCC8C0 32%,
+    #DEDAD4 40%,
+    #E4E0DA 44%,
+    #D8D4CE 48%,
+    #C0BCB5 58%,
+    #A8A39C 72%,
+    #B8B4AE 85%,
+    #9A9590 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  padding-bottom: 0.12em; /* prevent descender clip on 'g' */
+  animation: mirrorSheen 5s ease-in-out infinite;
+}
+@keyframes mirrorSheen {
+  0%   { background-position: 100% 0; }
+  50%  { background-position: 0%   0; }
+  100% { background-position: 100% 0; }
+}
+
+/* ── KINETIC CENTER ── */
+.kinetic {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+}
+
+.kinetic-inner {
+  position: relative;
+  width: 560px;
+  max-width: 90vw;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Each phrase is absolutely stacked, fades in/out */
+.phrase {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+.phrase.active { opacity: 1; }
+.phrase.exiting { opacity: 0; }
+
+/* Phrase label */
+.phrase-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: var(--font-d);
+}
+
+/* Main text row — words laid out inline */
+.phrase-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-family: var(--font-m);
+  font-size: clamp(22px, 3.2vw, 36px);
+  color: var(--text);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.phrase-main.large {
+  font-family: var(--font-s);
+  font-style: italic;
+  font-size: clamp(32px, 4.5vw, 52px);
+  letter-spacing: -1.5px;
+  font-weight: 300;
+  gap: 16px;
+}
+
+.phrase-sub {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-d);
+  font-weight: 500;
+}
+
+/* ── KINETIC WORD ── */
+.kword {
+  display: inline-block;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* When phrase is active, each kword plays its entrance */
+.phrase.active .kword {
+  animation: kwordIn 0.55s cubic-bezier(0.22, 1.4, 0.36, 1) var(--kd, 0ms) forwards;
+}
+
+@keyframes kwordIn {
+  from {
+    opacity: 0;
+    transform: rotate(var(--kr, 0deg)) translateY(var(--ky, 14px)) scale(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0deg) translateY(0px) scale(1);
+  }
+}
+
+/* Colored tokens */
+.tok-cmd   { color: #2563EB; }
+.tok-tick  { color: #16A34A; }
+.tok-warn  { color: #D97706; }
+.tok-muted { color: var(--muted); }
+
+/* ── SOURCE CHIPS (service logos) ── */
+.src-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(0,0,0,0.055);
+  border: 1px solid rgba(0,0,0,0.09);
+  border-radius: 14px;
+  padding: 7px 16px 7px 10px;
+  font-family: var(--font-d);
+  font-weight: 700;
+  font-size: clamp(14px, 1.8vw, 19px);
+  letter-spacing: -0.2px;
+  color: var(--text);
+}
+.src-chip img { height: 20px; width: 20px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
+.src-chip svg { height: 18px; width: auto; flex-shrink: 0; }
+
+/* ── DATA TAG CHIPS ── */
+.phrase-tags {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+.tag-chip {
+  font-family: var(--font-d);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.2px;
+  display: inline-block;
+}
+.tag-green { background: #DCFCE7; color: #15803D; }
+.tag-blue  { background: #DBEAFE; color: #1D4ED8; }
+.tag-red   { background: #FEE2E2; color: #B91C1C; }
+
+/* ── PHRASE 2: CLAUDE ANCHOR ── */
+.claude-anchor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+}
+.phrase.active .claude-anchor {
+  animation: claudeEnter 0.6s cubic-bezier(0.22, 1.4, 0.36, 1) forwards;
+}
+@keyframes claudeEnter {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.claude-logo-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  background: rgba(217,119,87,0.08);
+  border: 1.5px solid rgba(217,119,87,0.22);
+  border-radius: 16px;
+}
+.claude-name {
+  font-family: var(--font-d);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #D97757;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+.sources-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ── CONVERGENCE — JS adds .converging to #p2 at ~1050ms ── */
+.phrase.converging .kword {
+  animation: convergeToward 0.45s cubic-bezier(0.55, 0, 1, 0.45) var(--cd, 0ms) forwards !important;
+}
+@keyframes convergeToward {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.15) translateY(-32px); }
+}
+
+/* Claude logo pulses when it absorbs everything */
+.phrase.converging .claude-logo-box {
+  animation: claudeAbsorb 0.7s cubic-bezier(0.22, 1.4, 0.36, 1) 0.28s forwards;
+}
+@keyframes claudeAbsorb {
+  0%  { box-shadow: 0 0 0px rgba(217,119,87,0); background: rgba(217,119,87,0.08); }
+  38% { box-shadow: 0 0 22px rgba(217,119,87,0.6), 0 0 44px rgba(217,119,87,0.22); background: rgba(217,119,87,0.18); transform: scale(1.28); }
+  68% { transform: scale(0.93); }
+  100%{ transform: scale(1); box-shadow: 0 0 10px rgba(217,119,87,0.25); background: rgba(217,119,87,0.12); }
+}
+
+/* ── PHRASE 0: TELEGRAM ANCHOR + TYPING DOTS ── */
+.tg-anchor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+}
+.phrase.active .tg-anchor {
+  animation: claudeEnter 0.5s cubic-bezier(0.22, 1.4, 0.36, 1) forwards;
+}
+.tg-logo-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: rgba(42,171,238,0.1);
+  border: 1.5px solid rgba(42,171,238,0.22);
+  border-radius: 16px;
+}
+.tg-label {
+  font-family: var(--font-d);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #2AABEE;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+.typing-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  opacity: 0;
+}
+.phrase.active .typing-row {
+  animation: dotsLifecycle 1.05s ease forwards;
+}
+.typing-sender {
+  font-family: var(--font-d);
+  font-size: 12px;
+  font-weight: 700;
+  color: #2AABEE;
+}
+.typing-dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 22px;
+}
+@keyframes dotsLifecycle {
+  0%   { opacity: 0; }
+  12%  { opacity: 1; }
+  72%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.t-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0;
+}
+.phrase.active .t-dot {
+  animation: dotBounce 0.65s ease-in-out infinite;
+}
+.phrase.active .t-dot:nth-child(2) { animation-delay: 0.15s; }
+.phrase.active .t-dot:nth-child(3) { animation-delay: 0.30s; }
+@keyframes dotBounce {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50%       { transform: translateY(-7px); opacity: 1; }
+}
+
+/* ── PHRASE 1: AGENT CHIPS ── */
+.agents-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.agent-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 14px;
+  padding: 11px 20px 9px;
+}
+.agent-name {
+  font-family: var(--font-d);
+  font-weight: 700;
+  font-size: clamp(13px, 1.6vw, 16px);
+  color: var(--text);
+}
+.agent-typing {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  height: 10px;
+}
+.a-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0;
+}
+.phrase.active .a-dot        { animation: agentDot 0.7s ease-in-out infinite; animation-delay: 880ms; }
+.phrase.active .a-dot:nth-child(2) { animation-delay: 1030ms; }
+.phrase.active .a-dot:nth-child(3) { animation-delay: 1180ms; }
+@keyframes agentDot {
+  0%, 100% { transform: translateY(0); opacity: 0.35; }
+  50%       { transform: translateY(-5px); opacity: 1; }
+}
+
+/* ── PHRASE 3: VOTE CHIPS ── */
+.votes-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.vote-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 12px;
+  padding: 9px 16px;
+  font-family: var(--font-d);
+  font-weight: 700;
+  font-size: clamp(12px, 1.5vw, 14px);
+}
+.v-approve { background: #DCFCE7; border: 1.5px solid #BBF7D0; color: #15803D; }
+.v-counter { background: #FEF3C7; border: 1.5px solid #FDE68A; color: #92400E; }
+.vote-icon { font-size: 15px; }
+.vote-alt  { font-size: 10px; opacity: 0.75; font-weight: 600; }
+/* Vote chips: spring entrance + lock snap 700ms after each appears */
+.phrase.active .vote-chip {
+  animation:
+    kwordIn 0.55s cubic-bezier(0.22, 1.4, 0.36, 1) var(--kd, 0ms) forwards,
+    lockSnap 0.3s cubic-bezier(0.22, 1.4, 0.36, 1) calc(var(--kd, 0ms) + 720ms) both;
+}
+@keyframes lockSnap {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+
+/* ── PHRASE 4: CONSENSUS ── */
+.mini-votes {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.mini-vote {
+  font-family: var(--font-d);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  opacity: 0;
+}
+.mv-approve { background: #DCFCE7; color: #15803D; }
+.mv-counter { background: #FEF3C7; color: #92400E; }
+.phrase.active .mini-vote {
+  animation:
+    miniIn 0.4s cubic-bezier(0.22, 1.4, 0.36, 1) var(--kd, 0ms) forwards,
+    mergeDown 0.45s cubic-bezier(0.55, 0, 1, 0.45) var(--mg, 800ms) forwards;
+}
+@keyframes miniIn {
+  from { opacity: 0; transform: scale(0.75) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes mergeDown {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.2) translateY(18px); }
+}
+.consensus-seal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(22,163,74,0.08);
+  border: 2px solid rgba(22,163,74,0.2);
+  margin: 0 auto;
+}
+/* Chain: enter at --kd, then glow 620ms later */
+.phrase.active .consensus-seal {
+  animation:
+    kwordIn 0.5s cubic-bezier(0.22, 1.4, 0.36, 1) 880ms forwards,
+    sealGlow 0.7s cubic-bezier(0.22, 1.4, 0.36, 1) 1500ms both;
+}
+@keyframes sealGlow {
+  0%  { box-shadow: none; background: rgba(22,163,74,0.08); }
+  38% { box-shadow: 0 0 22px rgba(22,163,74,0.55), 0 0 44px rgba(22,163,74,0.2); background: rgba(22,163,74,0.18); transform: scale(1.25); }
+  68% { transform: scale(0.94); }
+  100%{ transform: scale(1); box-shadow: 0 0 10px rgba(22,163,74,0.22); background: rgba(22,163,74,0.12); }
+}
+
+/* ── STEPS WRAPPER ── */
+.steps-wrapper {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 72px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── STEPS ROW ── */
+.steps {
+  display: flex;
+  align-items: flex-end;
+  gap: 56px;
+  position: relative;
+}
+
+.steps::before {
+  content: '';
+  position: absolute;
+  bottom: 44px;
+  left: 44px; right: 44px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #D4D0C8 15%, #D4D0C8 85%, transparent);
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.steps:has(.step:hover)::before { opacity: 0.1; }
+
+/* ── SINGLE STEP ── */
+.step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  cursor: default;
+  transition: filter 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+
+.steps:has(.step:hover) .step:not(:hover) {
+  filter: blur(4px);
+  opacity: 0.15;
+}
+
+/* ── PHONE FLOAT ── */
+.phone-float {
+  position: absolute;
+  bottom: calc(100% + 24px);
+  left: 50%;
+  transform: translateX(-50%) perspective(1600px) rotateY(-11deg) rotateX(5deg) translateY(50px) scale(0.78);
+  opacity: 0;
+  transition:
+    transform 0.55s cubic-bezier(0.34, 1.28, 0.64, 1),
+    opacity 0.38s ease;
+  pointer-events: none;
+  filter: drop-shadow(0 28px 56px rgba(0,0,0,0.2)) drop-shadow(0 6px 12px rgba(0,0,0,0.1));
+}
+
+.phone-float--multi {
+  width: 440px;
+}
+
+.step:hover .phone-float {
+  opacity: 1;
+  transform: translateX(-50%) perspective(1600px) rotateY(-11deg) rotateX(5deg) translateY(0) scale(1);
+}
+
+/* ── PHONE SHELL ── */
+.phone {
+  width: 216px;
+  background: linear-gradient(145deg, #2C2C2E, #1A1A1C);
+  border-radius: 42px;
+  padding: 11px;
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,0.1),
+    inset 0 1px 0 rgba(255,255,255,0.09),
+    inset 0 -1px 0 rgba(0,0,0,0.4);
+}
+
+.phone-sm { width: 158px; }
+
+.phone-screen {
+  background: #EDE8DF;
+  border-radius: 33px;
+  overflow: hidden;
+}
+
+.phone-sm .phone-screen {
+  border-radius: 26px;
+}
+
+/* Notch */
+.phone-notch {
+  height: 20px;
+  background: #1A1A1C;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0 0 12px 12px;
+  width: 52px;
+  margin: 0 auto;
+}
+
+.notch-cam {
+  width: 7px; height: 7px;
+  background: #2C2C2E;
+  border-radius: 50%;
+  border: 1.5px solid #3A3A3C;
+}
+
+/* Telegram header */
+.tg-hdr {
+  background: rgba(251,251,251,0.96);
+  backdrop-filter: blur(12px);
+  padding: 8px 12px 7px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 0.5px solid rgba(0,0,0,0.06);
+}
+
+.tg-hdr-sm { padding: 6px 9px 5px; gap: 6px; }
+
+.tg-back {
+  font-size: 13px;
+  color: #2481CC;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.tg-av {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: white;
+  flex-shrink: 0;
+}
+
+.av-bot { background: linear-gradient(135deg, #FF7043, #FFAB40); }
+.av-grp { background: linear-gradient(135deg, #1E88E5, #42A5F5); }
+
+.tg-meta { line-height: 1.2; }
+.tg-meta strong { display: block; font-size: 11px; font-weight: 600; color: #000; font-family: var(--font-d); }
+.tg-meta span   { font-size: 9px; color: #8E8E93; }
+
+/* Chat */
+.tg-chat {
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 290px;
+}
+
+.tg-datestamp {
+  align-self: center;
+  font-size: 9px; color: #666;
+  background: rgba(0,0,0,0.09);
+  padding: 2px 8px; border-radius: 8px;
+  margin-bottom: 2px;
+}
+
+.msg {
+  max-width: 94%;
+  padding: 7px 9px 5px;
+  border-radius: 14px;
+  font-size: 10.2px;
+  line-height: 1.45;
+  color: #111;
+  font-family: var(--font-d);
+  position: relative;
+}
+
+.msg.in {
+  background: #fff;
+  align-self: flex-start;
+  border-bottom-left-radius: 3px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.msg.out {
+  background: #DCFFD2;
+  align-self: flex-end;
+  border-bottom-right-radius: 3px;
+}
+
+.msg-time   { font-size: 8px; color: #9E9E9E; float: right; margin-left: 8px; margin-top: 1px; }
+.msg-sender { display: block; font-size: 9px; font-weight: 700; color: #E64A19; margin-bottom: 3px; font-family: var(--font-d); }
+.msg-url    { display: block; font-size: 9px; color: #2481CC; word-break: break-all; margin: 3px 0; }
+
+.link-prev  {
+  margin-top: 5px;
+  border-left: 2.5px solid #2481CC;
+  padding: 3px 6px;
+  background: rgba(36,129,204,0.07);
+  border-radius: 0 5px 5px 0;
+}
+.lp-d { font-size: 8.5px; color: #2481CC; font-weight: 600; font-family: var(--font-d); }
+.lp-t { font-size: 8.5px; font-weight: 600; color: #111; font-family: var(--font-d); }
+.lp-s { font-size: 8px; color: #9E9E9E; }
+
+.tg-keys { display: flex; gap: 3px; margin-top: 5px; }
+.tg-key  { flex: 1; padding: 5px 2px; background: #F2F2F7; border-radius: 6px; font-size: 8.5px; font-weight: 600; text-align: center; font-family: var(--font-d); }
+.tg-key.ap { color: #27AE60; }
+.tg-key.rj { color: #E53935; }
+.tg-key.co { color: #9E9E9E; }
+
+/* ── FAN LAYOUT ── */
+.phone-fan {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 290px;
+}
+
+.fan-phone { position: absolute; bottom: 0; transition: transform 0.2s ease; }
+
+.fan-left   { left: 0;   transform: rotate(-9deg) translateY(12px); z-index: 1; transform-origin: bottom center; }
+.fan-center { left: 50%; transform: translateX(-50%) translateY(0); z-index: 3; transform-origin: bottom center; }
+.fan-right  { right: 0;  transform: rotate(9deg) translateY(12px);  z-index: 2; transform-origin: bottom center; }
+
+/* ── ICON BOX ── */
+.icon-box {
+  width: 88px; height: 88px;
+  background: rgba(255, 252, 245, 0.62);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow:
+    0 8px 28px rgba(30,20,10,0.09),
+    0 2px 6px rgba(30,20,10,0.06),
+    inset 0 1px 0 rgba(255,255,255,0.8),
+    inset 0 -1px 0 rgba(0,0,0,0.04);
+  border: 1px solid rgba(30,20,10,0.08);
+  transition: transform 0.35s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.35s ease;
+  flex-shrink: 0;
+  position: relative; z-index: 2;
+}
+
+.step:hover .icon-box {
+  transform: scale(0.9) translateY(4px);
+  box-shadow: 0 4px 12px rgba(30,20,10,0.08), 0 1px 3px rgba(30,20,10,0.05);
+  background: rgba(255,252,245,0.8);
+}
+
+.icon-box svg {
+  width: 29px; height: 29px;
+  stroke: rgba(30,20,10,0.72);
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── STEP LABEL ── */
+.step-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3D3A33;
+  letter-spacing: -0.1px;
+  text-align: center;
+  position: relative; z-index: 2;
+}
+
+</style>
+</head>
+<body>
+
+<!-- SILK WAVES BACKGROUND -->
+<canvas id="bg-canvas"></canvas>
+
+<!-- HEADER -->
+<header>
+  <div class="wordmark">
+    <span class="wm-italic">Pair</span>
+    <span class="wm-bold">Mirroring</span>
+  </div>
+</header>
+
+<!-- KINETIC CENTER -->
+<div class="kinetic">
+  <div class="kinetic-inner">
+
+    <!-- Phrase 0: group proposal -->
+    <div class="phrase active" id="p0">
+      <div class="phrase-label">Propuesta en el grupo</div>
+
+      <!-- Telegram anchor — appears first -->
+      <div class="tg-anchor">
+        <div class="tg-logo-box">
+          <svg width="26" height="26" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.014 9.487c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.392c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.877.736z" fill="#2AABEE"/>
+          </svg>
+        </div>
+        <div class="tg-label">Yeiyei · Pod inversión</div>
+      </div>
+
+      <!-- Sender + typing indicator — like "Marcos is typing…" in Telegram -->
+      <div class="typing-row">
+        <div class="typing-sender">Marcos</div>
+        <div class="typing-dots">
+          <div class="t-dot"></div>
+          <div class="t-dot"></div>
+          <div class="t-dot"></div>
+        </div>
+      </div>
+
+      <!-- Command resolves out of the typing -->
+      <div class="phrase-main">
+        <span class="kword tok-cmd" style="--kd:1050ms">/propose</span>
+        <span class="kword" style="--kd:1120ms">NVDA</span>
+        <span class="kword tok-tick" style="--kd:1190ms">$300</span>
+      </div>
+    </div>
+
+    <!-- Phrase 1: agents -->
+    <div class="phrase" id="p1">
+      <div class="phrase-label">Agentes analizando en privado</div>
+
+      <!-- Three agent chips with typing indicators -->
+      <div class="agents-row">
+        <div class="kword agent-chip" style="--kd:0ms">
+          <span class="agent-name">Marcos</span>
+          <span class="agent-typing"><span class="a-dot"></span><span class="a-dot"></span><span class="a-dot"></span></span>
+        </div>
+        <div class="kword agent-chip" style="--kd:130ms">
+          <span class="agent-name">María</span>
+          <span class="agent-typing"><span class="a-dot"></span><span class="a-dot"></span><span class="a-dot"></span></span>
+        </div>
+        <div class="kword agent-chip" style="--kd:260ms">
+          <span class="agent-name">Juan</span>
+          <span class="agent-typing"><span class="a-dot"></span><span class="a-dot"></span><span class="a-dot"></span></span>
+        </div>
+      </div>
+      <div class="phrase-sub kword" style="--kd:380ms">3 DMs privados simultáneos</div>
+    </div>
+
+    <!-- Phrase 2: context absorption -->
+    <div class="phrase" id="p2">
+      <div class="phrase-label">El agente absorbe tu contexto</div>
+
+      <!-- Claude logo — anchor, enters first, stays visible during converge -->
+      <div class="claude-anchor">
+        <div class="claude-logo-box">
+          <svg width="30" height="30" viewBox="0 0 248 248" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M52.4285 162.873L98.7844 136.879L99.5485 134.602L98.7844 133.334H96.4921L88.7237 132.862L62.2346 132.153L39.3113 131.207L17.0249 130.026L11.4214 128.844L6.2 121.873L6.7094 118.447L11.4214 115.257L18.171 115.847L33.0711 116.911L55.485 118.447L71.6586 119.392L95.728 121.873H99.5485L100.058 120.337L98.7844 119.392L97.7656 118.447L74.5877 102.732L49.4995 86.1905L36.3823 76.62L29.3779 71.7757L25.8121 67.2858L24.2839 57.3608L30.6515 50.2716L39.3113 50.8623L41.4763 51.4531L50.2636 58.1879L68.9842 72.7209L93.4357 90.6804L97.0015 93.6343L98.4374 92.6652L98.6571 91.9801L97.0015 89.2625L83.757 65.2772L69.621 40.8192L63.2534 30.6579L61.5978 24.632C60.9565 22.1032 60.579 20.0111 60.579 17.4246L67.8381 7.49965L71.9133 6.19995L81.7193 7.49965L85.7946 11.0443L91.9074 24.9865L101.714 46.8451L116.996 76.62L121.453 85.4816L123.873 93.6343L124.764 96.1155H126.292V94.6976L127.566 77.9197L129.858 57.3608L132.15 30.8942L132.915 23.4505L136.608 14.4708L143.994 9.62643L149.725 12.344L154.437 19.0788L153.8 23.4505L150.998 41.6463L145.522 70.1215L141.957 89.2625H143.994L146.414 86.7813L156.093 74.0206L172.266 53.698L179.398 45.6635L187.803 36.802L193.152 32.5484H203.34L210.726 43.6549L207.415 55.1159L196.972 68.3492L188.312 79.5739L175.896 96.2095L168.191 109.585L168.882 110.689L170.738 110.53L198.755 104.504L213.91 101.787L231.994 98.7149L240.144 102.496L241.036 106.395L237.852 114.311L218.495 119.037L195.826 123.645L162.07 131.592L161.696 131.893L162.137 132.547L177.36 133.925L183.855 134.279H199.774L229.447 136.524L237.215 141.605L241.8 147.867L241.036 152.711L229.065 158.737L213.019 154.956L175.45 145.977L162.587 142.787H160.805V143.85L171.502 154.366L191.242 172.089L215.82 195.011L217.094 200.682L213.91 205.172L210.599 204.699L188.949 188.394L180.544 181.069L161.696 165.118H160.422V166.772L164.752 173.152L187.803 207.771L188.949 218.405L187.294 221.832L181.308 223.959L174.813 222.777L161.187 203.754L147.305 182.486L136.098 163.345L134.745 164.2L128.075 235.42L125.019 239.082L117.887 241.8L111.902 237.31L108.718 229.984L111.902 215.452L115.722 196.547L118.779 181.541L121.58 162.873L123.291 156.636L123.14 156.219L121.773 156.449L107.699 175.752L86.304 204.699L69.3663 222.777L65.291 224.431L58.2867 220.768L58.9235 214.27L62.8713 208.48L86.304 178.705L100.44 160.155L109.551 149.507L109.462 147.967L108.959 147.924L46.6977 188.512L35.6182 189.93L30.7788 185.44L31.4156 178.115L33.7079 175.752L52.4285 162.873Z" fill="#D97757"/>
+          </svg>
+        </div>
+        <div class="claude-name">Claude Agent</div>
+      </div>
+
+      <!-- Sources — enter staggered, then converge -->
+      <div class="sources-row">
+        <span class="kword src-chip" style="--kd:180ms; --cd:0ms">
+          <img src="https://cdn.prod.website-files.com/67aca5c7e0a415189908624c/67b6370e0b2efbe76d495579_256x256.png" alt="Wallbit">
+          Wallbit
+        </span>
+        <span class="kword src-chip" style="--kd:300ms; --cd:60ms">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 24" fill="none" aria-label="Supermemory"><path d="M29.3388 9.46767H18.448V0.00146484H14.9293V10.2725C14.9293 11.3634 15.36 12.411 16.1254 13.183L25.018 22.151L27.506 19.6419L20.938 13.0183H29.3408V9.46975L29.3388 9.46767Z" fill="currentColor"/><path d="M1.82839 4.36056L8.39633 10.9842H-0.00646973V14.5328H10.8843V23.999H14.403V13.728C14.403 12.637 13.9723 11.5894 13.2069 10.8175L4.31635 1.85147L1.82839 4.36056Z" fill="currentColor"/></svg>
+          Supermemory
+        </span>
+      </div>
+
+      <!-- Data chips -->
+      <div class="phrase-tags">
+        <span class="kword tag-chip tag-green" style="--kd:430ms; --cd:110ms">NVDA · VTI</span>
+        <span class="kword tag-chip tag-blue"  style="--kd:510ms; --cd:150ms">prefers-ETF</span>
+        <span class="kword tag-chip tag-red"   style="--kd:590ms; --cd:190ms">rechazó TSLA</span>
+      </div>
+      <div class="phrase-sub kword" style="--kd:680ms; --cd:120ms">portafolio real · memoria de negociaciones · perfil propio</div>
+    </div>
+
+    <!-- Phrase 3: agent decisions -->
+    <div class="phrase" id="p3">
+      <div class="phrase-label">Recomendaciones de los agentes</div>
+
+      <div class="votes-row">
+        <div class="kword vote-chip v-approve" style="--kd:0ms">
+          <span class="vote-icon">✓</span>
+          <span>Marcos</span>
+        </div>
+        <div class="kword vote-chip v-counter" style="--kd:150ms">
+          <span class="vote-icon">⚙</span>
+          <span>María<span class="vote-alt"> → VEU</span></span>
+        </div>
+        <div class="kword vote-chip v-approve" style="--kd:300ms">
+          <span class="vote-icon">✓</span>
+          <span>Juan</span>
+        </div>
+      </div>
+      <div class="phrase-sub kword" style="--kd:400ms">cada agente decidió por su cuenta</div>
+    </div>
+
+    <!-- Phrase 4: consensus -->
+    <div class="phrase" id="p4">
+      <div class="phrase-label">Resultado</div>
+
+      <!-- Mini vote chips converge downward into consensus -->
+      <div class="mini-votes">
+        <span class="mini-vote mv-approve" style="--kd:0ms;  --mg:750ms">✓ Marcos</span>
+        <span class="mini-vote mv-counter" style="--kd:80ms; --mg:800ms">⚙ María</span>
+        <span class="mini-vote mv-approve" style="--kd:160ms;--mg:850ms">✓ Juan</span>
+      </div>
+
+      <!-- Green seal — appears as chips merge, then glows -->
+      <div class="kword consensus-seal" style="--kd:880ms">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+
+      <div class="phrase-main large">
+        <span class="kword" style="--kd:980ms">Consenso</span>
+        <span class="kword" style="--kd:1100ms">alcanzado</span>
+      </div>
+      <div class="phrase-sub kword" style="--kd:1180ms">publicado en el grupo · NVDA $300</div>
+    </div>
+  </div>
+</div>
+
+<!-- STEPS -->
+<div class="steps-wrapper">
+  <div class="steps">
+
+    <!-- 1 · CONECTAR -->
+    <div class="step">
+      <div class="phone-float phone-float--multi">
+        <div class="phone-fan">
+          <div class="fan-phone fan-left">
+            <div class="phone phone-sm">
+              <div class="phone-screen">
+                <div class="tg-hdr tg-hdr-sm">
+                  <div class="tg-av av-bot" style="width:22px;height:22px;font-size:9px;">Y</div>
+                  <div class="tg-meta"><strong style="font-size:9.5px;">Yeiyei</strong><span style="font-size:8px;">María · CDMX</span></div>
+                </div>
+                <div class="tg-chat" style="padding:8px 7px;gap:4px;min-height:210px;">
+                  <div class="tg-datestamp" style="font-size:8.5px;">May 21</div>
+                  <div class="msg in" style="font-size:8.5px;padding:6px 7px 4px;">
+                    Hola <strong>@maria_cdmx</strong> 👋<br><br>
+                    Conectá tu Wallbit de forma segura:<br><br>
+                    🔗 <span class="msg-url" style="font-size:8px;">pair.app/connect?token=c2e1…</span>
+                    ⏱ Expira en 15 min.
+                    <div class="link-prev" style="margin-top:4px;">
+                      <div class="lp-d">pair.app</div>
+                      <div class="lp-t">Conectar Wallbit</div>
+                      <div class="lp-s">AES-256</div>
+                    </div>
+                    <span class="msg-time">22:43</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fan-phone fan-center">
+            <div class="phone phone-sm">
+              <div class="phone-screen">
+                <div class="tg-hdr tg-hdr-sm">
+                  <div class="tg-av av-bot" style="width:22px;height:22px;font-size:9px;">Y</div>
+                  <div class="tg-meta"><strong style="font-size:9.5px;">Yeiyei</strong><span style="font-size:8px;">Marcos · BA</span></div>
+                </div>
+                <div class="tg-chat" style="padding:8px 7px;gap:4px;min-height:210px;">
+                  <div class="tg-datestamp" style="font-size:8.5px;">May 21</div>
+                  <div class="msg in" style="font-size:8.5px;padding:6px 7px 4px;">
+                    Hola <strong>@marcos_ba</strong> 👋<br><br>
+                    Conectá tu Wallbit de forma segura:<br><br>
+                    🔗 <span class="msg-url" style="font-size:8px;">pair.app/connect?token=a8f3…</span>
+                    ⏱ Expira en 15 min.
+                    <div class="link-prev" style="margin-top:4px;">
+                      <div class="lp-d">pair.app</div>
+                      <div class="lp-t">Conectar Wallbit</div>
+                      <div class="lp-s">AES-256</div>
+                    </div>
+                    <span class="msg-time">22:45</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fan-phone fan-right">
+            <div class="phone phone-sm">
+              <div class="phone-screen">
+                <div class="tg-hdr tg-hdr-sm">
+                  <div class="tg-av av-bot" style="width:22px;height:22px;font-size:9px;">Y</div>
+                  <div class="tg-meta"><strong style="font-size:9.5px;">Yeiyei</strong><span style="font-size:8px;">Juan · SP</span></div>
+                </div>
+                <div class="tg-chat" style="padding:8px 7px;gap:4px;min-height:210px;">
+                  <div class="tg-datestamp" style="font-size:8.5px;">May 21</div>
+                  <div class="msg in" style="font-size:8.5px;padding:6px 7px 4px;">
+                    Hola <strong>@juan_sp</strong> 👋<br><br>
+                    Conectá tu Wallbit de forma segura:<br><br>
+                    🔗 <span class="msg-url" style="font-size:8px;">pair.app/connect?token=f7b9…</span>
+                    ⏱ Expira en 15 min.
+                    <div class="link-prev" style="margin-top:4px;">
+                      <div class="lp-d">pair.app</div>
+                      <div class="lp-t">Conectar Wallbit</div>
+                      <div class="lp-s">AES-256</div>
+                    </div>
+                    <span class="msg-time">22:47</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+      </div>
+      <div class="step-label">Conectar</div>
+    </div>
+
+    <!-- 2 · PROPONER -->
+    <div class="step">
+      <div class="phone-float">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-notch"><div class="notch-cam"></div></div>
+            <div class="tg-hdr">
+              <span class="tg-back">‹</span>
+              <div class="tg-av av-grp">P</div>
+              <div class="tg-meta"><strong>Pod de inversión</strong><span>3 miembros</span></div>
+            </div>
+            <div class="tg-chat">
+              <div class="tg-datestamp">Hoy</div>
+              <div class="msg in">
+                <span class="msg-sender">Marcos</span>
+                /propose AMZN 1000
+                <span class="msg-time">19:25</span>
+              </div>
+              <div class="msg in">
+                <span class="msg-sender">Yeiyei</span>
+                📋 <strong>Propuesta:</strong> comprar $1000 de AMZN<br><br>
+                Consultando a cada miembro… Los resultados llegan en segundos.
+                <span class="msg-time">19:25</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24">
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+          <polyline points="17 6 23 6 23 12"/>
+        </svg>
+      </div>
+      <div class="step-label">Proponer</div>
+    </div>
+
+    <!-- 3 · NEGOCIAR -->
+    <div class="step">
+      <div class="phone-float phone-float--multi">
+        <div class="phone-fan">
+          <div class="fan-phone fan-left">
+            <div class="phone phone-sm">
+              <div class="phone-screen">
+                <div class="tg-hdr tg-hdr-sm">
+                  <div class="tg-av av-bot" style="width:22px;height:22px;font-size:9px;">Y</div>
+                  <div class="tg-meta"><strong style="font-size:9.5px;">Yeiyei</strong><span style="font-size:8px;">María · CDMX</span></div>
+                </div>
+                <div class="tg-chat" style="padding:8px 7px;gap:4px;min-height:210px;">
+                  <div class="msg in" style="font-size:8.5px;padding:6px 7px 4px;">
+                    📋 <strong>AMZN $1000</strong> · ronda 1<br><br>
+                    ⚙️ <strong>Recomendación:</strong> Contraoferta<br><br>
+                    💬 Prefiero diversificación global. Propongo VEU $800.
+                    <div class="tg-keys" style="margin-top:4px;">
+                      <div class="tg-key ap" style="font-size:7.5px;">✅ Aprobar</div>
+                      <div class="tg-key rj" style="font-size:7.5px;">❌ Rechazar</div>
+                      <div class="tg-key co" style="font-size:7.5px;">⚙️ VEU</div>
+                    </div>
+                    <span class="msg-time">19:26</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fan-phone fan-center">
+            <div class="phone phone-sm">
+              <div class="phone-screen">
+                <div class="tg-hdr tg-hdr-sm">
+                  <div class="tg-av av-bot" style="width:22px;height:22px;font-size:9px;">Y</div>
+                  <div class="tg-meta"><strong style="font-size:9.5px;">Yeiyei</strong><span style="font-size:8px;">Marcos · BA</span></div>
+                </div>
+                <div class="tg-chat" style="padding:8px 7px;gap:4px;min-height:210px;">
+                  <div class="msg in" style="font-size:8.5px;padding:6px 7px 4px;">
+                    📋 <strong>AMZN $1000</strong> · ronda 1<br><br>
+                    ✅ <strong>Recomendación:</strong> Aprobar<br><br>
+                    💬 Diversifica tu cartera tech y alinea con tu horizonte largo.
+                    <div class="tg-keys" style="margin-top:4px;">
+                      <div class="tg-key ap" style="font-size:7.5px;">✅ Aprobar</div>
+                      <div class="tg-key rj" style="font-size:7.5px;">❌ Rechazar</div>
+                      <div class="tg-key co" style="font-size:7.5px;">⚙️ Contra…</div>
+                    </div>
+                    <span class="msg-time">19:26</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fan-phone fan-right">
+            <div class="phone phone-sm">
+              <div class="phone-screen">
+                <div class="tg-hdr tg-hdr-sm">
+                  <div class="tg-av av-bot" style="width:22px;height:22px;font-size:9px;">Y</div>
+                  <div class="tg-meta"><strong style="font-size:9.5px;">Yeiyei</strong><span style="font-size:8px;">Juan · SP</span></div>
+                </div>
+                <div class="tg-chat" style="padding:8px 7px;gap:4px;min-height:210px;">
+                  <div class="msg in" style="font-size:8.5px;padding:6px 7px 4px;">
+                    📋 <strong>AMZN $1000</strong> · ronda 1<br><br>
+                    ✅ <strong>Recomendación:</strong> Aprobar<br><br>
+                    💬 Sólida exposición a AWS y e-commerce. Complementa MSFT.
+                    <div class="tg-keys" style="margin-top:4px;">
+                      <div class="tg-key ap" style="font-size:7.5px;">✅ Aprobar</div>
+                      <div class="tg-key rj" style="font-size:7.5px;">❌ Rechazar</div>
+                      <div class="tg-key co" style="font-size:7.5px;">⚙️ Contra…</div>
+                    </div>
+                    <span class="msg-time">19:26</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </div>
+      <div class="step-label">Negociar</div>
+    </div>
+
+    <!-- 4 · CONSENSO -->
+    <div class="step">
+      <div class="phone-float">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-notch"><div class="notch-cam"></div></div>
+            <div class="tg-hdr">
+              <span class="tg-back">‹</span>
+              <div class="tg-av av-grp">P</div>
+              <div class="tg-meta"><strong>Pod de inversión</strong><span>3 miembros</span></div>
+            </div>
+            <div class="tg-chat">
+              <div class="tg-datestamp">Hoy</div>
+              <div class="msg in">
+                <span class="msg-sender">Yeiyei</span>
+                ✅ <strong>Consenso alcanzado</strong><br><br>
+                Comprar $1000 de AMZN<br><br>
+                Todos los miembros aprobaron.<br>¡A invertir!
+                <span class="msg-time">19:26</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+      </div>
+      <div class="step-label">Consenso</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const total = 5;
+let current = 0;
+const HOLD    = 2600;   // default hold per phrase
+const HOLD_P0 = 3400;   // extra time: command appears at 1190ms
+const HOLD_P2 = 4200;   // extra time: context phrase has most content
+const HOLD_P4 = 3600;   // extra time: consensus text appears at 980ms+
+const CONVERGE_AT = 2600; // ms after p2 activates → trigger funnel
+
+let convergTimer = null;
+
+function randomBetween(a, b) {
+  return a + Math.random() * (b - a);
+}
+
+function seedPhrase(id) {
+  const phrase = document.getElementById('p' + id);
+  // Reset convergence state
+  phrase.classList.remove('converging');
+  // Reset anchor-style elements so their entrance replays
+  phrase.querySelectorAll('.claude-anchor, .tg-anchor, .typing-row').forEach(el => {
+    el.style.animation = 'none';
+    el.offsetHeight;
+    el.style.animation = '';
+  });
+  phrase.querySelectorAll('.kword').forEach(w => {
+    const r = randomBetween(-28, 28).toFixed(1);
+    const y = randomBetween(10, 28).toFixed(1);
+    w.style.setProperty('--kr', r + 'deg');
+    w.style.setProperty('--ky', y + 'px');
+    w.style.animation = 'none';
+    w.offsetHeight;
+    w.style.animation = '';
+  });
+}
+
+function advance() {
+  if (convergTimer) { clearTimeout(convergTimer); convergTimer = null; }
+
+  const cur = document.getElementById('p' + current);
+  cur.classList.remove('active', 'converging');
+
+  current = (current + 1) % total;
+
+  seedPhrase(current);
+  const next = document.getElementById('p' + current);
+  next.classList.add('active');
+
+  // Phrase 2: trigger funnel convergence midway through
+  if (current === 2) {
+    convergTimer = setTimeout(() => {
+      next.classList.add('converging');
+    }, CONVERGE_AT);
+  }
+
+  const holdMap = { 0: HOLD_P0, 2: HOLD_P2, 4: HOLD_P4 };
+  setTimeout(advance, holdMap[current] ?? HOLD);
+}
+
+// Seed phrase 0 on load
+seedPhrase(0);
+setTimeout(advance, HOLD);
+</script>
+
+<script>
+(function() {
+  const canvas = document.getElementById('bg-canvas');
+  const gl = canvas.getContext('webgl', { alpha: false, antialias: false });
+  if (!gl) return; // fallback to body background
+
+  const VS = `
+    attribute vec2 a_pos;
+    void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+  `;
+
+  const FS = `
+    precision mediump float;
+    uniform float iTime;
+    uniform vec3  iResolution;
+
+    vec2 hash22(vec2 p) {
+      vec3 p3 = fract(p.xyx * vec3(0.1031, 0.1030, 0.0973));
+      p3 += dot(p3, p3.yzx + 33.33);
+      return fract((p3.xx + p3.yz) * p3.zy);
+    }
+
+    float noise(vec2 p) {
+      const float kF = 1024.0;
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f *= f * (3.0 - 2.0 * f);
+      return mix(
+        mix(sin(kF * dot(p, hash22(i + vec2(0.0, 0.0)))),
+            sin(kF * dot(p, hash22(i + vec2(1.0, 0.0)))), f.x),
+        mix(sin(kF * dot(p, hash22(i + vec2(0.0, 1.0)))),
+            sin(kF * dot(p, hash22(i + vec2(1.0, 1.0)))), f.x), f.y);
+    }
+
+    float fabric(vec2 p) {
+      mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+      float f = 0.0;
+      f += 0.4 * noise(p); p = m * p;
+      f += 0.3 * noise(p); p = m * p;
+      f += 0.2 * noise(p); p = m * p;
+      f += 0.1 * noise(p);
+      return f;
+    }
+
+    const float A = 12.0;
+    const float B = 2.0;
+    const float C = 5.0;
+    const float D = 5.0;
+
+    float silk(vec2 uv, float t) {
+      float s = sin(D * (uv.x + uv.y + cos(B * uv.x + C * uv.y)) + sin(A * (uv.x + uv.y)) - t);
+      s = 0.7 + 0.3 * (s * s * 0.5 + s);
+      s *= 0.9 + 0.6 * fabric(uv * min(iResolution.x, iResolution.y) * 0.0006);
+      return s * 0.9 + 0.1;
+    }
+
+    float silkd(vec2 uv, float t) {
+      float xy = uv.x + uv.y;
+      float d = (D * (1.0 - B * sin(B * uv.x + C * uv.y)) + A * cos(A * xy))
+              * cos(D * (cos(B * uv.x + C * uv.y) + xy) + sin(A * xy) - t);
+      return 0.005 * d * (sign(d) + 3.0);
+    }
+
+    void main() {
+      vec2 uv = gl_FragCoord.xy / min(iResolution.x, iResolution.y);
+      float t = iTime;
+      uv.y += 0.03 * sin(8.0 * uv.x - t);
+
+      float s = sqrt(silk(uv, t));
+      float d = silkd(uv, t);
+
+      vec3 c = vec3(s);
+      c += 0.7 * vec3(1.0, 0.83, 0.6) * d;
+      c *= 1.0 - max(0.0, 0.8 * d);
+
+      /* Light version — non-inverted gamma, then blend 92% toward cream */
+      c = pow(c, vec3(0.52, 0.5, 0.4));
+      vec3 cream = vec3(0.965, 0.961, 0.945); /* #F6F5F1 */
+      c = mix(cream, c, 0.22);
+
+      gl_FragColor = vec4(c, 1.0);
+    }
+  `;
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    return sh;
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+
+  // Fullscreen quad
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+  const uTime = gl.getUniformLocation(prog, 'iTime');
+  const uRes  = gl.getUniformLocation(prog, 'iResolution');
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio, 2); // cap at 2× for perf
+    canvas.width  = window.innerWidth  * dpr;
+    canvas.height = window.innerHeight * dpr;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.uniform3f(uRes, canvas.width, canvas.height, 1.0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  let t = 0;
+  function frame() {
+    t += 0.003; // slow, meditative drift
+    gl.uniform1f(uTime, t);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>
+
+</body>
+</html>

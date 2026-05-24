@@ -121,6 +121,23 @@ async function sendOnboardingQuestions(telegramUserId: number, wallbitData: any)
       ]],
     },
   })
+
+  await bot.telegram.sendMessage(telegramUserId, '4️⃣ ¿Qué sectores te interesan más?', {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '💻 Tecnología', callback_data: 'ob:preferred_category:TECHNOLOGY' },
+          { text: '📊 ETFs', callback_data: 'ob:preferred_category:ETF' },
+          { text: '🏥 Salud', callback_data: 'ob:preferred_category:HEALTH' },
+        ],
+        [
+          { text: '🏦 Finanzas', callback_data: 'ob:preferred_category:FINANCE' },
+          { text: '⚡ Energía', callback_data: 'ob:preferred_category:ENERGY_AND_WATER' },
+          { text: '🛒 Consumo', callback_data: 'ob:preferred_category:CONSUMER_GOODS' },
+        ],
+      ],
+    },
+  })
 }
 
 // Called from webhook/route.ts when a user clicks an onboarding button
@@ -151,7 +168,7 @@ export async function handleOnboardingCallback(
   await bot.telegram.answerCbQuery(callbackQueryId, '✅ Guardado')
 
   // All 3 answered → finalize (guard against duplicate Telegram retries)
-  if (selfReported.risk && selfReported.objective && selfReported.horizon) {
+  if (selfReported.risk && selfReported.objective && selfReported.horizon && selfReported.preferred_category) {
     const { data: check } = await supabase
       .from('user_profiles')
       .select('onboarding_completed')
@@ -195,6 +212,7 @@ Self-reported:
 - Risk reaction to -20%: ${self_reported.risk} (conservative=sell, moderate=hold, aggressive=buy-more)
 - Objective: ${self_reported.objective} (preserve=capital preservation, growth=long-term growth, income=max return)
 - Horizon: ${self_reported.horizon} (short=<1yr, medium=1-5yr, long=>5yr)
+- Preferred sector (Wallbit category): ${self_reported.preferred_category}
 
 Wallbit portfolio:
 - Cash balance (USD): ${wallbit?.cash_balance ?? 0}
@@ -203,7 +221,7 @@ Wallbit portfolio:
 - Transaction count: ${wallbit?.transaction_count ?? 0}
 - Data quality: ${wallbit?.data_quality ?? 'empty'}
 
-inferred_signals: short English tags e.g. "tech-concentrated", "low-cash", "long-horizon", "diversified".
+inferred_signals: short English tags e.g. "tech-concentrated", "low-cash", "long-horizon", "diversified", "prefers-etf", "prefers-technology".
 summary: 1 sentence in Spanish describing this investor for negotiation context.`,
     }],
   })

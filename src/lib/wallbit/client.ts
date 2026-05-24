@@ -32,6 +32,10 @@ export async function getAsset(apiKey: string, symbol: string) {
   return wallbitFetch(apiKey, `/api/public/v1/assets/${symbol}`)
 }
 
+export async function getAssetsByCategory(apiKey: string, category: string, limit = 5) {
+  return wallbitFetch(apiKey, `/api/public/v1/assets?category=${encodeURIComponent(category)}&limit=${limit}`)
+}
+
 // Sector classification fallback — used when /assets/{symbol} doesn't return sector
 export const SECTOR_MAP: Record<string, string> = {
   NVDA: 'tech', MSFT: 'tech', AAPL: 'tech', AMZN: 'tech', GOOGL: 'tech',

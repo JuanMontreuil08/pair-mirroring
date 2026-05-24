@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { decrypt } from '@/lib/crypto'
 import { runProposalAgent } from '@/lib/pod/agent'
 import { sendDecisionDM } from '@/lib/telegram/handlers/dm'
-import { getAsset } from '@/lib/wallbit/client'
+import { getAsset, getAssetsByCategory } from '@/lib/wallbit/client'
 
 const memory = new Supermemory({ apiKey: process.env.SUPERMEMORY_API_KEY })
 
@@ -81,6 +81,22 @@ export async function runOrchestrator({ proposal, podId, chatId }: OrchestratorP
         proposal.total_amount_usd
       )
 
+      // Fetch real Wallbit tickers in the member's preferred category for counteroffer grounding
+      let availableAlternatives: string[] = []
+      const preferredCategory = profile?.self_reported?.preferred_category
+      if (preferredCategory && firstKey) {
+        try {
+          const assetsRes = await getAssetsByCategory(firstKey, preferredCategory, 5)
+          const assets: Array<{ symbol: string }> = assetsRes?.data ?? []
+          availableAlternatives = assets
+            .map((a) => a.symbol)
+            .filter((s) => s && s !== proposal.symbol)
+          console.log(`[orchestrator] alternatives for user ${member.telegram_user_id} (${preferredCategory}): ${availableAlternatives.join(', ')}`)
+        } catch (err) {
+          console.warn(`[orchestrator] failed to fetch alternatives for category ${preferredCategory}:`, err)
+        }
+      }
+
       console.log(`[orchestrator] running agent for user ${member.telegram_user_id}`)
 
       const decision = await runProposalAgent(
@@ -89,6 +105,7 @@ export async function runOrchestrator({ proposal, podId, chatId }: OrchestratorP
           profile,
           memoryContext,
           stockInfo,
+          availableAlternatives,
         },
         {
           symbol: proposal.symbol,

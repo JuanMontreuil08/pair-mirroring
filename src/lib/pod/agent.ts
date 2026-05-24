@@ -20,6 +20,7 @@ export interface UserContext {
   profile: any                        // from user_profiles.profile (onboarding result)
   memoryContext: string               // from Supermemory — past negotiation patterns
   stockInfo: Record<string, any> | null  // from Wallbit /assets/{symbol}
+  availableAlternatives: string[]     // from Wallbit /assets?category=X — real tickers for counteroffers
 }
 
 export interface AgentDecision {
@@ -34,7 +35,7 @@ export async function runProposalAgent(
   ctx: UserContext,
   proposal: Proposal
 ): Promise<AgentDecision> {
-  const { profile, memoryContext, stockInfo, telegramUserId } = ctx
+  const { profile, memoryContext, stockInfo, telegramUserId, availableAlternatives } = ctx
   const isOwnProposal = telegramUserId === proposal.proposedBy
 
   const response = await anthropic.messages.create({
@@ -112,6 +113,11 @@ ${stockInfo ? `- Name: ${stockInfo.name ?? proposal.symbol}
 ## Proposal
 - Symbol: ${proposal.symbol}
 - Amount: $${proposal.amount} USD
+
+## Wallbit Alternatives (for counteroffer)
+${availableAlternatives.length > 0
+  ? `If you decide to counteroffer, you MUST pick the symbol from this list of real Wallbit-tradeable assets that match this investor's preferred sector:\n${availableAlternatives.join(', ')}\nDo not suggest symbols outside this list.`
+  : 'No alternatives pre-fetched — use your best judgment for counteroffer symbols.'}
 
 ## Ground Rules
 Base all decisions strictly on the data provided above. Do not infer or assume facts about this investor that are not present in their profile or memory. If a field is unknown or empty, treat it as unknown — do not fill in gaps with assumptions. For stock analysis, the Wallbit data above takes priority over general market knowledge.
