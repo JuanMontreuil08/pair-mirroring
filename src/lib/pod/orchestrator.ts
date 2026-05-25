@@ -8,6 +8,7 @@ import { decrypt } from '@/lib/crypto'
 import { runProposalAgent } from '@/lib/pod/agent'
 import { sendDecisionDM } from '@/lib/telegram/handlers/dm'
 import { getAsset, getAssetsByCategory } from '@/lib/wallbit/client'
+import { getStockNews, formatNewsForPrompt } from '@/lib/perplexity/client'
 
 const memory = new Supermemory({ apiKey: process.env.SUPERMEMORY_API_KEY })
 
@@ -69,6 +70,17 @@ export async function runOrchestrator({ proposal, podId, chatId }: OrchestratorP
     }
   }
 
+  // Fetch news once — shared across all members (same ticker, same context)
+  let newsContext = 'No recent news available.'
+  try {
+    console.log(`[perplexity] fetching news for ${proposal.symbol}...`)
+    const news = await getStockNews(proposal.symbol, 7)
+    newsContext = formatNewsForPrompt(news)
+    console.log(`[perplexity] ${proposal.symbol} → ${news.length} articles fetched`)
+  } catch (err) {
+    console.warn(`[perplexity] news fetch failed for ${proposal.symbol}:`, err)
+  }
+
   // Run all agents in parallel — one per member
   const agentResults = await Promise.all(
     members.map(async (member) => {
@@ -106,6 +118,7 @@ export async function runOrchestrator({ proposal, podId, chatId }: OrchestratorP
           memoryContext,
           stockInfo,
           availableAlternatives,
+          newsContext,
         },
         {
           symbol: proposal.symbol,

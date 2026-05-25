@@ -21,6 +21,7 @@ export interface UserContext {
   memoryContext: string               // from Supermemory — past negotiation patterns
   stockInfo: Record<string, any> | null  // from Wallbit /assets/{symbol}
   availableAlternatives: string[]     // from Wallbit /assets?category=X — real tickers for counteroffers
+  newsContext: string                 // from Perplexity — last 7 days of news for the proposed ticker
 }
 
 export interface AgentDecision {
@@ -35,7 +36,7 @@ export async function runProposalAgent(
   ctx: UserContext,
   proposal: Proposal
 ): Promise<AgentDecision> {
-  const { profile, memoryContext, stockInfo, telegramUserId, availableAlternatives } = ctx
+  const { profile, memoryContext, stockInfo, telegramUserId, availableAlternatives, newsContext } = ctx
   const isOwnProposal = telegramUserId === proposal.proposedBy
 
   const response = await anthropic.messages.create({
@@ -109,6 +110,10 @@ ${stockInfo ? `- Name: ${stockInfo.name ?? proposal.symbol}
 - Employees: ${stockInfo.employees ?? 'unknown'}
 - Dividend yield: ${stockInfo.dividend?.yield != null ? `${stockInfo.dividend.yield}%` : 'none'}
 - Description: ${stockInfo.description_es ?? stockInfo.description ?? 'No description available'}` : 'Stock data unavailable — rely on training knowledge.'}
+
+## Recent News (last 7 days)
+${newsContext}
+Use this to flag event-driven risks (earnings surprises, regulatory action, geopolitical exposure) in risk_flags.
 
 ## Proposal
 - Symbol: ${proposal.symbol}
