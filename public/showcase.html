@@ -744,6 +744,192 @@ header {
 .fan-center { left: 50%; transform: translateX(-50%) translateY(0); z-index: 3; transform-origin: bottom center; }
 .fan-right  { right: 0;  transform: rotate(9deg) translateY(12px);  z-index: 2; transform-origin: bottom center; }
 
+/* ── WAITLIST BUTTON ── */
+.waitlist-btn {
+  position: fixed;
+  top: 1.4rem;
+  right: 1.8rem;
+  z-index: 100;
+  color: #F6F5F1;
+  font-family: var(--font-d);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.48rem 1.1rem;
+  border-radius: 100px;
+  border: none;
+  cursor: pointer;
+  background: var(--text);
+  box-shadow: 0 2px 12px rgba(16,15,13,0.18);
+  transition: box-shadow 0.2s ease, transform 0.15s ease, background 0.15s;
+}
+.waitlist-btn:hover {
+  background: #2A2722;
+  box-shadow: 0 4px 20px rgba(16,15,13,0.26);
+  transform: translateY(-1px);
+}
+
+/* ── WAITLIST POPUP ── */
+.waitlist-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(16,15,13,0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.waitlist-overlay.open { display: flex; }
+
+.waitlist-modal {
+  background: rgba(246,245,241,0.88);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(196,192,184,0.35);
+  border-radius: 24px;
+  box-shadow: 0 24px 64px rgba(16,15,13,0.14), 0 4px 16px rgba(16,15,13,0.06);
+  padding: 2.1rem 2rem 1.8rem;
+  width: 400px;
+  max-width: calc(100vw - 2rem);
+  position: relative;
+  animation: popupIn 320ms cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+@keyframes popupIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.waitlist-close {
+  position: absolute;
+  top: 1.1rem; right: 1.1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted2);
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.3rem 0.45rem;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
+}
+.waitlist-close:hover { color: var(--text); background: rgba(16,15,13,0.06); }
+
+.waitlist-title {
+  font-family: var(--font-s);
+  font-style: italic;
+  font-weight: 300;
+  font-size: 1.6rem;
+  color: var(--text);
+  margin-bottom: 0.3rem;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+.waitlist-sub {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 1.6rem;
+  line-height: 1.55;
+}
+
+/* Line-style inputs — same glass language as the page */
+.wl-field {
+  margin-bottom: 1.1rem;
+  position: relative;
+}
+.wl-field label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+}
+.wl-field .opt {
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted2);
+}
+.wl-field input,
+.wl-field textarea {
+  width: 100%;
+  background: rgba(255,255,255,0.45);
+  border: none;
+  border-bottom: 1.5px solid rgba(16,15,13,0.14);
+  border-radius: 0;
+  padding: 0.55rem 0;
+  font-family: var(--font-d);
+  font-size: 0.9rem;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.18s;
+  resize: none;
+}
+.wl-field input::placeholder,
+.wl-field textarea::placeholder { color: var(--muted2); }
+.wl-field input:focus,
+.wl-field textarea:focus { border-bottom-color: var(--text); }
+.wl-field textarea { height: 68px; padding-top: 0.4rem; }
+
+.wl-submit {
+  width: 100%;
+  margin-top: 1.4rem;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 100px;
+  cursor: pointer;
+  font-family: var(--font-d);
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #F6F5F1;
+  background: var(--text);
+  letter-spacing: 0.01em;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 10px rgba(16,15,13,0.18);
+}
+.wl-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.wl-submit:not(:disabled):hover {
+  background: #2A2722;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(16,15,13,0.24);
+}
+
+.wl-error {
+  font-size: 0.76rem;
+  color: #9B3A3A;
+  margin-top: 0.6rem;
+  display: none;
+}
+.wl-error.show { display: block; }
+
+/* Success state */
+.waitlist-success {
+  display: none;
+  text-align: center;
+  padding: 1.8rem 0 0.8rem;
+}
+.waitlist-success.show { display: block; }
+.wl-success-mark {
+  font-size: 1.6rem;
+  margin-bottom: 0.9rem;
+  color: var(--muted);
+}
+.wl-success-title {
+  font-family: var(--font-s);
+  font-style: italic;
+  font-weight: 300;
+  font-size: 1.5rem;
+  color: var(--text);
+  margin-bottom: 0.45rem;
+  letter-spacing: -0.3px;
+}
+.wl-success-sub {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 /* ── ICON BOX ── */
 .icon-box {
   width: 88px; height: 88px;
@@ -794,6 +980,45 @@ header {
 
 <!-- SILK WAVES BACKGROUND -->
 <canvas id="bg-canvas"></canvas>
+
+<!-- WAITLIST BUTTON -->
+<button class="waitlist-btn" id="waitlistBtn">Unirse →</button>
+
+<!-- WAITLIST POPUP -->
+<div class="waitlist-overlay" id="waitlistOverlay">
+  <div class="waitlist-modal" id="waitlistModal">
+    <button class="waitlist-close" id="waitlistClose" aria-label="Cerrar">✕</button>
+
+    <!-- Form state -->
+    <div id="wlForm">
+      <div class="waitlist-title">Únete a la lista</div>
+      <div class="waitlist-sub">Conecta tu grupo de Telegram y empieza a invertir con tus amigos. Pair Mirroring hace el resto.</div>
+
+      <div class="wl-field">
+        <label for="wlName">Nombre</label>
+        <input id="wlName" type="text" placeholder="Tu nombre" autocomplete="name" required>
+      </div>
+      <div class="wl-field">
+        <label for="wlEmail">Email</label>
+        <input id="wlEmail" type="email" placeholder="tú@ejemplo.com" autocomplete="email" required>
+      </div>
+      <div class="wl-field">
+        <label for="wlMessage">¿Qué es lo primero que te llamó la atención de Pair Mirroring? <span class="opt">(opcional)</span></label>
+        <textarea id="wlMessage" placeholder="La idea de invertir con amigos desde Telegram, el agente de IA…"></textarea>
+      </div>
+
+      <button class="wl-submit" id="wlSubmit">Unirme →</button>
+      <div class="wl-error" id="wlError"></div>
+    </div>
+
+    <!-- Success state -->
+    <div class="waitlist-success" id="wlSuccess">
+      <div class="wl-success-mark">✦</div>
+      <div class="wl-success-title">Ya estás dentro.</div>
+      <div class="wl-success-sub">Te escribimos pronto.</div>
+    </div>
+  </div>
+</div>
 
 <!-- HEADER -->
 <header>
@@ -1384,6 +1609,71 @@ setTimeout(advance, HOLD);
     requestAnimationFrame(frame);
   }
   frame();
+})();
+</script>
+
+<!-- WAITLIST LOGIC -->
+<script>
+(function () {
+  const overlay = document.getElementById('waitlistOverlay');
+  const modal   = document.getElementById('waitlistModal');
+  const openBtn = document.getElementById('waitlistBtn');
+  const closeBtn= document.getElementById('waitlistClose');
+  const form    = document.getElementById('wlForm');
+  const success = document.getElementById('wlSuccess');
+  const submit  = document.getElementById('wlSubmit');
+  const errEl   = document.getElementById('wlError');
+
+  function openModal() {
+    overlay.classList.add('open');
+    document.getElementById('wlName').focus();
+  }
+  function closeModal() {
+    overlay.classList.remove('open');
+  }
+
+  openBtn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', function (e) {
+    if (!modal.contains(e.target)) closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  submit.addEventListener('click', async function () {
+    const name    = document.getElementById('wlName').value.trim();
+    const email   = document.getElementById('wlEmail').value.trim();
+    const message = document.getElementById('wlMessage').value.trim();
+
+    errEl.classList.remove('show');
+
+    if (!name || !email) {
+      errEl.textContent = 'Nombre y email son requeridos.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    submit.disabled = true;
+    submit.textContent = 'Enviando…';
+
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, message: message || null })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error desconocido');
+      form.style.display = 'none';
+      success.classList.add('show');
+    } catch (err) {
+      errEl.textContent = err.message || 'Algo salió mal. Intenta de nuevo.';
+      errEl.classList.add('show');
+      submit.disabled = false;
+      submit.textContent = 'Unirme →';
+    }
+  });
 })();
 </script>
 
