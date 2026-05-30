@@ -10,10 +10,7 @@ Built for the [Wallbit Hackathon](https://wallbit.io).
 
 ## Demo
 
-<!-- Add your 1-minute demo video here. Recommended: upload to YouTube/Loom and embed below -->
-<!-- [![Watch the demo](https://img.youtube.com/vi/YOUR_VIDEO_ID/maxresdefault.jpg)](https://youtu.be/YOUR_VIDEO_ID) -->
-
-> **Demo video coming soon.** Watch the full negotiation flow: `/propose NVDA 300` → private per-member AI analysis → María counters with QQQ → consensus posted to group.
+**[Watch the demo on LinkedIn](https://www.linkedin.com/posts/juan-montreuil_wallbit-yc-w23-api-challenge-built-ugcPost-7465230327511216129-iBci/)** — full negotiation flow: `/propose NVDA 300` → private per-member AI analysis → María counters with QQQ → consensus posted to group.
 
 ---
 
